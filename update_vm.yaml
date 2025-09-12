@@ -2,6 +2,7 @@
 - name: Update Ubuntu Server VMs
   hosts: ubuntu_vms
   become: true
+  become_method: sudo
   gather_facts: yes
   
   tasks:
