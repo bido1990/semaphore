@@ -21,6 +21,8 @@
       apt:
         update_cache: yes
         cache_valid_time: 3600
+      become: true
+      become_method: sudo
       register: apt_cache_update
 
     - name: Upgrade all packages
@@ -28,6 +30,8 @@
         upgrade: dist
         autoremove: yes
         autoclean: yes
+      become: true
+      become_method: sudo      
       register: apt_upgrade_result
 
     - name: Check if reboot is required
