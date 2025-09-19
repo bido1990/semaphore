@@ -1,5 +1,5 @@
 ---
-- name: Update Ubuntu Server VMs
+- name: Update Ubuntu Server VMs with safe maintenance window (no SIGKILL)
   hosts: ubuntu_vms
   become: true
   become_method: sudo
@@ -7,10 +7,11 @@
 
   vars:
     uu_log_since: "24h"
-    uu_temp_stop: true
     uu_timers:
       - apt-daily.timer
       - apt-daily-upgrade.timer
+    apt_lock_timeout: 300
+    lock_wait_secs: 600        # how long to wait for locks to clear if stop hangs
 
   pre_tasks:
     - name: Show unattended-upgrades status (systemctl show)
@@ -44,47 +45,59 @@
       changed_when: false
       failed_when: false
 
-    - name: Read classic unattended-upgrades logfile if present
-      ansible.builtin.slurp:
-        src: /var/log/unattended-upgrades/unattended-upgrades.log
-      register: uu_filelog
-      ignore_errors: true
-
     - name: Print unattended-upgrades logs (journald, truncated)
       ansible.builtin.debug:
         msg: "{{ uu_logs.stdout | default('no journald logs') | truncate(6000, end='...') }}"
 
-    - name: Print unattended-upgrades logfile (truncated)
-      when: uu_filelog is defined and uu_filelog.content is defined
-      ansible.builtin.debug:
-        msg: "{{ (uu_filelog.content | b64decode) | truncate(6000, end='...') }}"
-
   tasks:
-    - name: Optionally stop unattended-upgrades service before updates
-      when: uu_temp_stop
-      ansible.builtin.systemd_service:
-        name: unattended-upgrades.service
-        state: stopped
-
-    - name: Optionally stop apt timers during maintenance
-      when: uu_temp_stop
+    - name: Stop apt timers first (avoid retriggers)
       ansible.builtin.systemd_service:
         name: "{{ item }}"
         state: stopped
       loop: "{{ uu_timers }}"
 
+    - block:
+        - name: Try graceful stop of unattended-upgrades
+          ansible.builtin.systemd_service:
+            name: unattended-upgrades.service
+            state: stopped
+          register: uu_stop_result
+
+      rescue:
+        - name: Informational note when graceful stop fails
+          ansible.builtin.debug:
+            msg: "Graceful stop failed; will wait for dpkg/apt locks to clear up to {{ lock_wait_secs }}s"
+
+        - name: Wait for dpkg/apt locks to be released (bounded)
+          ansible.builtin.shell: |
+            end=$(( $(date +%s) + {{ lock_wait_secs }} ))
+            while [ "$(date +%s)" -lt "$end" ]; do
+              if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+                 fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+                 fuser /var/lib/apt/lists/lock >/dev/null 2>&1; then
+                echo "Lock detected, waiting 10s..."
+                sleep 10
+              else
+                exit 0
+              fi
+            done
+            echo "Timeout waiting for locks" >&2
+            exit 1
+          register: lock_wait
+          changed_when: false
+
     - name: Update apt cache with lock wait
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
-        lock_timeout: 300
+        lock_timeout: "{{ apt_lock_timeout }}"
 
     - name: Dist upgrade with cleanup and lock wait
       ansible.builtin.apt:
         upgrade: dist
         autoremove: true
         autoclean: true
-        lock_timeout: 300
+        lock_timeout: "{{ apt_lock_timeout }}"
       register: apt_upgrade_result
 
     - name: Check if reboot is required
@@ -93,14 +106,12 @@
       register: reboot_required_file
 
     - name: Start apt timers after maintenance
-      when: uu_temp_stop
       ansible.builtin.systemd_service:
         name: "{{ item }}"
         state: started
       loop: "{{ uu_timers }}"
 
     - name: Start unattended-upgrades after maintenance
-      when: uu_temp_stop
       ansible.builtin.systemd_service:
         name: unattended-upgrades.service
         state: started
