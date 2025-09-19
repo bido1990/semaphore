@@ -3,8 +3,8 @@
   hosts: ubuntu_vms
   become: true
   vars:
-    uu_log_since: "2h"          # journal time window (e.g., '2h', 'today', '2025-09-19 12:00')
-    uu_temp_stop: true          # set to false to only inspect without stopping
+    uu_log_since: "24h"
+    uu_temp_stop: true
     uu_services:
       - unattended-upgrades.service
     uu_timers:
@@ -12,64 +12,77 @@
       - apt-daily-upgrade.timer
 
   pre_tasks:
-    - name: Show status of unattended-upgrades service
-      ansible.builtin.systemd_service:
-        name: unattended-upgrades.service
-        state: started
-        enabled: null
-        daemon_reload: false
-      check_mode: true
-      register: uu_status
+    - name: Show unattended-upgrades status (systemctl show)
+      ansible.builtin.command: >
+        systemctl show unattended-upgrades.service
+        -p ActiveState -p SubState -p LoadState -p UnitFileState
+      register: uu_show
+      changed_when: false
 
-    - name: Show status of apt timers
-      ansible.builtin.command: "systemctl status {{ item }}"
+    - name: Print service state
+      ansible.builtin.debug:
+        msg: "{{ uu_show.stdout }}"
+
+    - name: Show apt timer status
+      ansible.builtin.command: "systemctl status {{ item }} --no-pager"
+      loop: "{{ uu_timers }}"
       register: timer_status
       changed_when: false
-      loop: "{{ uu_timers }}"
 
-    - name: Collect recent unattended-upgrades logs
+    - name: Print timer status
+      ansible.builtin.debug:
+        msg: "{{ item.stdout }}"
+      loop: "{{ timer_status.results }}"
+
+    - name: Collect recent unattended-upgrades logs from journald
       ansible.builtin.command: >
         journalctl -u unattended-upgrades
         --since "{{ uu_log_since }}"
         --no-pager
       register: uu_logs
       changed_when: false
+      failed_when: false
 
-    - name: Print unattended-upgrades status summary
-      ansible.builtin.debug:
-        msg:
-          - "unattended-upgrades active (check-mode probe): {{ uu_status.status.ActiveState | default('unknown') }}"
-          - "Timers probed: {{ uu_timers }}"
-          - "Log window since: {{ uu_log_since }}"
+    - name: Read classic unattended-upgrades log file if present
+      ansible.builtin.slurp:
+        src: /var/log/unattended-upgrades/unattended-upgrades.log
+      register: uu_filelog
+      ignore_errors: true
 
-    - name: Print unattended-upgrades logs (truncated)
+    - name: Print unattended-upgrades logs (journald, truncated)
       ansible.builtin.debug:
-        msg: "{{ uu_logs.stdout | default('no logs') | truncate(4000, end='...') }}"
+        msg: "{{ uu_logs.stdout | default('no journald logs') | truncate(6000, end='...') }}"
+
+    - name: Print unattended-upgrades logfile (truncated)
+      when: uu_filelog is defined and uu_filelog.content is defined
+      ansible.builtin.debug:
+        msg: "{{ (uu_filelog.content | b64decode) | truncate(6000, end='...') }}"
 
   tasks:
-    - name: Optionally stop unattended-upgrades service before updates
+    - name: Optionally stop unattended-upgrades service
       when: uu_temp_stop
       ansible.builtin.systemd_service:
         name: unattended-upgrades.service
         state: stopped
 
-    - name: Optionally stop apt timers during maintenance window
+    - name: Optionally stop apt timers
       when: uu_temp_stop
       ansible.builtin.systemd_service:
         name: "{{ item }}"
         state: stopped
       loop: "{{ uu_timers }}"
 
-    # Place update/upgrade tasks here (example commented out)
-    # - name: Update apt cache with lock wait
-    #   ansible.builtin.apt:
-    #     update_cache: true
-    #     cache_valid_time: 3600
-    #     lock_timeout: 300
-    # - name: Dist upgrade
-    #   ansible.builtin.apt:
-    #     upgrade: dist
-    #     lock_timeout: 300
+    # Example maintenance window operations
+    - name: Update apt cache with lock wait
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        lock_timeout: 300
+
+    - name: Dist upgrade with lock wait
+      ansible.builtin.apt:
+        upgrade: dist
+        lock_timeout: 300
 
   post_tasks:
     - name: Start apt timers after maintenance
@@ -79,17 +92,18 @@
         state: started
       loop: "{{ uu_timers }}"
 
-    - name: Start unattended-upgrades service after maintenance
+    - name: Start unattended-upgrades after maintenance
       when: uu_temp_stop
       ansible.builtin.systemd_service:
         name: unattended-upgrades.service
         state: started
 
-    - name: Show next runs for timers
-      ansible.builtin.command: systemctl list-timers --all | sed -n '1,20p'
-      changed_when: false
+    - name: Show next scheduled timers
+      ansible.builtin.command: systemctl list-timers --all --no-pager
       register: list_timers
+      changed_when: false
 
-    - name: Print next timers
+    - name: Print next timers (first 30 lines)
       ansible.builtin.debug:
-        msg: "{{ list_timers.stdout }}"
+        msg: "{{ list_timers.stdout.splitlines()[:30] | join('\n') }}"
+        
