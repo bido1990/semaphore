@@ -1,6 +1,6 @@
 ---
 - name: Manage unattended-upgrades during maintenance
-  hosts: ubuntu
+  hosts: ubuntu_vms
   become: true
   vars:
     uu_log_since: "2h"          # journal time window (e.g., '2h', 'today', '2025-09-19 12:00')
