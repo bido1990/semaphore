@@ -1,0 +1,40 @@
+---
+- name: Backup Immich PostgreSQL database to NAS
+  hosts: immich_host
+  become: true
+  vars:
+    container_name: "immich_postgres"
+    db_user: "postgres"   # Change if different in stack.env
+    backup_dir: "/mnt/NASGuido_photo/Immich_DB_Backup"
+    keep_days: 14
+
+  tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Run pg_dumpall inside container and gzip to NAS
+      shell: >
+        docker exec -t {{ container_name }}
+        pg_dumpall --clean --if-exists --username={{ db_user }}
+        | gzip > {{ backup_dir }}/dump_$(date +%F_%H-%M).sql.gz
+      args:
+        executable: /bin/bash
+
+    - name: Remove backups older than {{ keep_days }} days
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "*.sql.gz"
+        age: "{{ keep_days }}d"
+      register: old_backups
+
+    - name: Delete old backups
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backups.files }}"
+      when: old_backups.matched > 0
