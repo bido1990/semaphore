@@ -15,6 +15,12 @@
           sleep 10
         done
       changed_when: false
+    - name: Ensure sudo access
+      assert:
+        that:
+          - ansible_user_id == 'root'
+        fail_msg: "Playbook must be run with sudo privileges."
+
 
   tasks:
     - name: Update apt cache
