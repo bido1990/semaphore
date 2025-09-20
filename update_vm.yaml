@@ -6,6 +6,10 @@
   gather_facts: yes
 
   pre_tasks:
+     - name: Show current SSH user
+    debug:
+      msg: "Connected as {{ ansible_user_id }}"
+
     - name: Wait for apt/dpkg locks to be released
       shell: |
         while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
