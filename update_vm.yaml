@@ -7,8 +7,8 @@
 
   pre_tasks:
      - name: Show current SSH user
-    debug:
-      msg: "Connected as {{ ansible_user_id }}"
+       debug:
+        msg: "Connected as {{ ansible_user_id }}"
 
     - name: Wait for apt/dpkg locks to be released
       shell: |
