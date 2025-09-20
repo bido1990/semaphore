@@ -1,0 +1,27 @@
+- name: Sync services.yaml da 192.168.50.101 a 192.168.50.50
+  hosts: "192.168.50.50"
+  gather_facts: false
+
+  vars:
+    src_host: "192.168.50.101"
+    src_path: "/home/guido/docker/homepage/services.yaml"
+    dest_path: "/volume1/docker/homepage/services.yaml"
+
+  tasks:
+    - name: Assicurare rsync presente su entrambi i nodi
+      ansible.builtin.package:
+        name: rsync
+        state: present
+      become: true
+
+    - name: Copiare solo le differenze del file (delta transfer)
+      ansible.posix.synchronize:
+        mode: pull
+        src: "{{ src_path }}"
+        dest: "{{ dest_path }}"
+        archive: yes
+        delete: no
+        rsync_opts:
+          - "--update"
+          - "--no-motd"
+      delegate_to: "{{ src_host }}"
