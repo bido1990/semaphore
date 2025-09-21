@@ -9,11 +9,15 @@
     keep_days: 14
 
   tasks:
-    - name: Ensure backup directory exists
-      file:
+    - name: Check if NAS backup directory exists
+      stat:
         path: "{{ backup_dir }}"
-        state: directory
-        mode: '0755'
+      register: backup_dir_stat
+    
+    - name: Fail if NAS backup directory is missing or inaccessible
+      fail:
+        msg: "Backup directory {{ backup_dir }} is not present or not accessible. Check NAS mount."
+      when: not backup_dir_stat.stat.exists or not backup_dir_stat.stat.isdir    
 
     - name: Run pg_dumpall inside container and gzip to NAS
       shell: >
