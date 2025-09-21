@@ -13,8 +13,6 @@
       file:
         path: "{{ backup_dir }}"
         state: directory
-        owner: root
-        group: root
         mode: '0755'
 
     - name: Run pg_dumpall inside container and gzip to NAS
