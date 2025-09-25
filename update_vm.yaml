@@ -52,12 +52,26 @@
 
     - name: Reboot server if required
       reboot:
-        reboot_timeout: 900       # più tempo per reboot lenti
-        pre_reboot_delay: 5
-        post_reboot_delay: 15     # attende prima di tentare la connessione
-        connect_timeout: 30
-        test_command: whoami
+        reboot_timeout: 600  # Aumentato da 900 a 600 secondi
+        connect_timeout: 60  # Aumentato da 30 a 60 secondi
+        pre_reboot_delay: 10 # Aumentato da 5 a 10 secondi
+        post_reboot_delay: 30 # Aumentato da 15 a 30 secondi
+        test_command: "uptime && systemctl is-system-running --wait"
+        msg: "Reboot initiated by Ansible for system updates"
       when: reboot_required_file.stat.exists
+      register: reboot_result
+      ignore_errors: true
+    
+    - name: Fallback reboot verification
+      wait_for_connection:
+        connect_timeout: 60
+        sleep: 10
+        delay: 30
+        timeout: 300
+      when: 
+        - reboot_required_file.stat.exists
+        - reboot_result is failed
+
 
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
