@@ -25,15 +25,6 @@
         mode: '0755'
       register: periphery_script
 
-    - name: Get latest version from installer (dry run)
-      ansible.builtin.command: "python3 {{ periphery_installer_path }} --version"
-      register: periphery_latest_version
-      changed_when: false
-
-    - name: Debug versions
-      ansible.builtin.debug:
-        msg: "Installed: {{ periphery_current_version.stdout | default('none') }}, Latest: {{ periphery_latest_version.stdout }}"
-
     - name: Run periphery installer if update needed
       ansible.builtin.command: "python3 {{ periphery_installer_path }}"
       when: periphery_current_version.stdout is not defined or
