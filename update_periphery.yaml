@@ -29,13 +29,18 @@
         url: "{{ periphery_installer_url }}"
         dest: "{{ periphery_installer_path }}"
         mode: '0755'
-        checksum_algorithm: sha256
       register: new_script
+
+    - name: Stat new installer after download
+      ansible.builtin.stat:
+        path: "{{ periphery_installer_path }}"
+        checksum_algorithm: sha256
+      register: updated_script
 
     - name: Run installer if script changed or periphery not installed
       ansible.builtin.command: "python3 {{ periphery_installer_path }}"
       when: existing_script.stat.checksum is not defined or
-            existing_script.stat.checksum != new_script.checksum or
+            existing_script.stat.checksum != updated_script.stat.checksum or
             periphery_current_version.stdout is not defined
       notify: Restart periphery service
 
