@@ -1,4 +1,4 @@
-- name: Install or update Komodo Periphery with version check
+- name: Install or update Komodo Periphery with checksum validation
   hosts: all
   become: true
 
@@ -7,7 +7,7 @@
     periphery_installer_path: "/tmp/setup-periphery.py"
 
   tasks:
-    - name: Ensure dependencies are present
+    - name: Ensure Python3 is installed
       ansible.builtin.package:
         name: python3
         state: present
@@ -18,17 +18,25 @@
       ignore_errors: yes
       changed_when: false
 
-    - name: Download periphery installer script
+    - name: Stat current installer if exists
+      ansible.builtin.stat:
+        path: "{{ periphery_installer_path }}"
+        checksum_algorithm: sha256
+      register: existing_script
+
+    - name: Download latest installer
       ansible.builtin.get_url:
         url: "{{ periphery_installer_url }}"
         dest: "{{ periphery_installer_path }}"
         mode: '0755'
-      register: periphery_script
+        checksum_algorithm: sha256
+      register: new_script
 
-    - name: Run periphery installer if update needed
+    - name: Run installer if script changed or periphery not installed
       ansible.builtin.command: "python3 {{ periphery_installer_path }}"
-      when: periphery_current_version.stdout is not defined or
-            periphery_current_version.stdout != periphery_latest_version.stdout
+      when: existing_script.stat.checksum is not defined or
+            existing_script.stat.checksum != new_script.checksum or
+            periphery_current_version.stdout is not defined
       notify: Restart periphery service
 
     - name: Ensure periphery service is enabled
