@@ -1,0 +1,53 @@
+- name: Install or update Komodo Periphery with version check
+  hosts: all
+  become: true
+
+  vars:
+    periphery_installer_url: "https://raw.githubusercontent.com/moghtech/komodo/main/scripts/setup-periphery.py"
+    periphery_installer_path: "/tmp/setup-periphery.py"
+
+  tasks:
+    - name: Ensure dependencies are present
+      ansible.builtin.package:
+        name: python3
+        state: present
+
+    - name: Check if periphery is already installed
+      ansible.builtin.command: /usr/local/bin/periphery --version
+      register: periphery_current_version
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Download periphery installer script
+      ansible.builtin.get_url:
+        url: "{{ periphery_installer_url }}"
+        dest: "{{ periphery_installer_path }}"
+        mode: '0755'
+      register: periphery_script
+
+    - name: Get latest version from installer (dry run)
+      ansible.builtin.command: "python3 {{ periphery_installer_path }} --version"
+      register: periphery_latest_version
+      changed_when: false
+
+    - name: Debug versions
+      ansible.builtin.debug:
+        msg: "Installed: {{ periphery_current_version.stdout | default('none') }}, Latest: {{ periphery_latest_version.stdout }}"
+
+    - name: Run periphery installer if update needed
+      ansible.builtin.command: "python3 {{ periphery_installer_path }}"
+      when: periphery_current_version.stdout is not defined or
+            periphery_current_version.stdout != periphery_latest_version.stdout
+      notify: Restart periphery service
+
+    - name: Ensure periphery service is enabled
+      ansible.builtin.systemd:
+        name: periphery
+        enabled: yes
+
+  handlers:
+    - name: Restart periphery service
+      ansible.builtin.systemd:
+        name: periphery
+        state: restarted
+        daemon_reload: yes
