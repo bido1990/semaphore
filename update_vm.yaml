@@ -43,12 +43,12 @@
     - name: Check if reboot is required
       stat:
         path: /var/run/reboot-required
-      register: reboot_required_file
+      register: reboot_required
 
     - name: Log reboot start time
       command: date "+%Y-%m-%d %H:%M:%S"
       register: reboot_start
-      when: reboot_required_file.stat.exists
+      when: reboot_required.stat.exists
 
     - name: Reboot server if required
       ansible.builtin.reboot:
@@ -70,7 +70,7 @@
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
       register: reboot_end
-      when: reboot_required_file.stat.exists
+      when: reboot_required.stat.exists
 
     - name: Show reboot duration
       debug:
@@ -80,4 +80,4 @@
               (reboot_start.stdout | to_datetime('%Y-%m-%d %H:%M:%S'))
             ).total_seconds() | int
           }} seconds.
-      when: reboot_required_file.stat.exists
+      when: reboot_required.stat.exists
