@@ -4,6 +4,8 @@
   become: true
   become_method: sudo
   gather_facts: yes
+  vars:
+    ansible_command_timeout: 3600
 
   pre_tasks:
     - name: Show current SSH user
