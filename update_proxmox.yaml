@@ -1,6 +1,6 @@
 ---
 - name: Proxmox VE Maintenance
-  hosts: proxmox_scrutiny_hosts
+  hosts: proxmox_hosts
   become: yes
   gather_facts: yes
   
