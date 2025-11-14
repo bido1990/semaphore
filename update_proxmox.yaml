@@ -1,6 +1,6 @@
 ---
 - name: Proxmox VE Maintenance
-  hosts: proxmox_hosts
+  hosts: 192.168.50.100
   become: yes
   gather_facts: yes
   
