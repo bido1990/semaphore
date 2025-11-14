@@ -1,0 +1,13 @@
+---
+- name: Run Scrutiny Collector Daily
+  hosts: proxmox_hosts
+  become: yes
+  gather_facts: yes
+  become: true
+  vars:
+    scrutiny_bin_path: "/opt/scrutiny/bin/scrutiny-collector-metrics-linux-amd64"
+    scrutiny_api_endpoint: "http://192.168.50.50:6080"
+
+  tasks:
+    - name: Run Scrutiny collector
+      command: "{{ scrutiny_bin_path }} run --api-endpoint {{ scrutiny_api_endpoint }}"
