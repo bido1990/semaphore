@@ -10,4 +10,4 @@
 
   tasks:
     - name: Run Scrutiny collector
-      command: "{{ scrutiny_bin_path }} run --api-endpoint {{ scrutiny_api_endpoint }} --host-id {{Proxmox}}"
+      command: "{{ scrutiny_bin_path }} run --api-endpoint {{ scrutiny_api_endpoint }} --host {{Proxmox}}"
