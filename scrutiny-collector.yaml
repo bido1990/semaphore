@@ -1,6 +1,6 @@
 ---
 - name: Run Scrutiny Collector Daily
-  hosts: proxmox_hosts
+  hosts: proxmox_scrutiny_hosts
   become: yes
   gather_facts: yes
   become: true
