@@ -1,6 +1,6 @@
 - name: Update Ubuntu Server VMs
   hosts: ubuntu_vms
-  serial: 1                # Riavvia un host alla volta
+  serial: 2                # Riavvia 2 host alla volta
   become: true
   become_method: sudo
   gather_facts: yes
@@ -40,6 +40,8 @@
         upgrade: dist
         autoremove: yes
         autoclean: yes
+        force_apt_get: yes
+        dpkg_options: "force-confdef,force-confold"
       register: apt_upgrade_result
 
     - name: Check if reboot is required
