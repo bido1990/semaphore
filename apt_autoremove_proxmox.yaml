@@ -1,0 +1,47 @@
+---
+- name: Monthly APT cleanup on Proxmox and PBS
+  hosts: proxmox_hosts # adapt to your inventory groups / hosts
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Wait for any existing apt/dpkg locks to be released
+      shell: |
+        while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
+           || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
+           || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 \
+           || fuser /var/cache/apt/archives/lock >/dev/null 2>&1
+        do
+          sleep 5
+        done
+      changed_when: false
+
+  tasks:
+    - name: Update APT cache (short validity)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Run apt autoremove (non‑interactive)
+      apt:
+        autoremove: yes
+        purge: yes
+      register: autoremove_result
+
+    - name: Run apt autoclean
+      apt:
+        autoclean: yes
+      register: autoclean_result
+
+    - name: Show freed space (optional)
+      shell: df -h /
+      register: disk_usage
+      changed_when: false
+
+    - name: Debug results
+      debug:
+        msg:
+          - "Autoremove changed={{ autoremove_result.changed }}"
+          - "Autoclean changed={{ autoclean_result.changed }}"
+          - "Disk usage:
+{{ disk_usage.stdout }}"
