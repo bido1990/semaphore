@@ -1,6 +1,6 @@
 - name: Update Ubuntu Server VMs
   hosts: ubuntu_vms
-  serial: 2                # Riavvia 2 host alla volta
+  serial: 2
   become: true
   become_method: sudo
   gather_facts: yes
@@ -14,11 +14,18 @@
 
     - name: Wait for apt/dpkg locks to be released
       shell: |
+        timeout=300
+        elapsed=0
         while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
               fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
               fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
           echo "APT lock detected. Waiting..."
           sleep 10
+          elapsed=$((elapsed + 10))
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for APT locks after ${timeout}s"
+            exit 1
+          fi
         done
       changed_when: false
 
@@ -34,6 +41,7 @@
         update_cache: yes
         cache_valid_time: 3600
       register: apt_cache_update
+      timeout: 300
 
     - name: Upgrade all packages
       apt:
@@ -43,6 +51,8 @@
         force_apt_get: yes
         dpkg_options: "force-confdef,force-confold"
       register: apt_upgrade_result
+      async: 2400
+      poll: 10
 
     - name: Check if reboot is required
       stat:
@@ -58,18 +68,27 @@
       ansible.builtin.reboot:
         msg: "Reboot initiated by Ansible"
         pre_reboot_delay: 0
-        post_reboot_delay: 15
-        reboot_timeout: 600
+        post_reboot_delay: 30
+        reboot_timeout: 900
+        test_command: uptime
       when: reboot_required.stat.exists
       ignore_errors: true
-    
+
     - name: Wait for server to come back online
       ansible.builtin.wait_for_connection:
-        connect_timeout: 20
-        sleep: 5
-        delay: 5
-        timeout: 300
+        connect_timeout: 30
+        sleep: 10
+        delay: 10
+        timeout: 600
       when: reboot_required.stat.exists
+
+    - name: Verify system is fully booted
+      ansible.builtin.wait_for:
+        path: /var/run/reboot-required
+        state: absent
+        timeout: 60
+      when: reboot_required.stat.exists
+      ignore_errors: true
 
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
@@ -84,4 +103,4 @@
               (reboot_start.stdout | to_datetime('%Y-%m-%d %H:%M:%S'))
             ).total_seconds() | int
           }} seconds.
-      when: reboot_required.stat.exists
+      when: reboot_required.stat.exists and reboot_end.stdout is defined
