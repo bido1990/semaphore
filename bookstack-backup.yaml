@@ -1,6 +1,6 @@
 ---
 - name: Weekly BookStack backup (DB + files)
-  hosts: bookstack
+  hosts: synology_host
   become: true
   gather_facts: false
 
