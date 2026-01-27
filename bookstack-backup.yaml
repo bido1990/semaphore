@@ -1,0 +1,83 @@
+---
+- name: Weekly BookStack backup (DB + files)
+  hosts: bookstack
+  become: true
+  gather_facts: false
+
+  vars:
+    backup_root: "/volume1/stuff/bookstack-backup"
+    retention_days: 60
+
+    # Path on the NAS to the BookStack app root (the folder that contains .env, public/, storage/, themes/)
+    bookstack_root: "/volume1/docker/bookstack/data"   # <-- change me
+
+    # Database settings
+    db_name: "bookstack"
+    db_user: "bookstackuser"
+    db_password: "Dm7Pv2E&k@*N"                          # Prefer Ansible Vault / Semaphore secret var
+
+    # If DB runs in Docker, set use_docker_db=true and provide container name
+    use_docker_db: true
+    db_container: "bookstack-db"                      # <-- change me (e.g., mariadb/mysql container)
+
+  tasks:
+    - name: Get timestamp (remote)
+      ansible.builtin.command: date +%Y%m%d-%H%M%S
+      register: ts
+      changed_when: false
+
+    - name: Set backup directory
+      ansible.builtin.set_fact:
+        backup_dir: "{{ backup_root }}/{{ ts.stdout }}"
+
+    - name: Ensure backup root exists
+      ansible.builtin.file:
+        path: "{{ backup_root }}"
+        state: directory
+        mode: "0750"
+
+    - name: Create this run backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: "0750"
+
+    - name: Dump database (docker exec)
+      when: use_docker_db | bool
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker exec {{ db_container }} sh -lc \
+          "mysqldump -u{{ db_user }} -p'{{ db_password }}' {{ db_name }}" \
+          > "{{ backup_dir }}/bookstack.sql"
+      args:
+        executable: /bin/bash
+
+    - name: Dump database (direct mysqldump on host)
+      when: not (use_docker_db | bool)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        mysqldump -u{{ db_user }} -p'{{ db_password }}' {{ db_name }} \
+          > "{{ backup_dir }}/bookstack.sql"
+      args:
+        executable: /bin/bash
+
+    - name: Archive BookStack files (.env + uploads + themes)
+      ansible.builtin.command: >
+        tar -czf {{ backup_dir }}/bookstack-files.tar.gz
+        -C {{ bookstack_root }}
+        .env public/uploads storage/uploads themes
+
+    - name: Write checksums
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd "{{ backup_dir }}"
+        sha256sum bookstack.sql bookstack-files.tar.gz > SHA256SUMS
+      args:
+        executable: /bin/bash
+
+    - name: Prune old backups (by retention_days)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find "{{ backup_root }}" -mindepth 1 -maxdepth 1 -type d -mtime +{{ retention_days }} -print0 | xargs -0r rm -rf
+      args:
+        executable: /bin/bash
