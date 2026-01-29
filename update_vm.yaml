@@ -1,17 +1,17 @@
 - name: Update Ubuntu Server VMs
   hosts: ubuntu_vms
-  serial: 2
+  serial: 1  # Changed to 1 to avoid connection issues during reboots
   become: true
   become_method: sudo
   gather_facts: yes
   vars:
     ansible_command_timeout: 3600
-
+  
   pre_tasks:
     - name: Show current SSH user
       debug:
         msg: Connected as {{ ansible_user_id }}
-
+    
     - name: Wait for apt/dpkg locks to be released
       shell: |
         timeout=300
@@ -28,13 +28,13 @@
           fi
         done
       changed_when: false
-
+    
     - name: Ensure sudo access
       assert:
         that:
           - ansible_user_id == 'root'
         fail_msg: Playbook must be run with sudo privileges.
-
+  
   tasks:
     - name: Update apt cache
       apt:
@@ -42,7 +42,7 @@
         cache_valid_time: 3600
       register: apt_cache_update
       timeout: 300
-
+    
     - name: Upgrade all packages
       apt:
         upgrade: dist
@@ -51,50 +51,51 @@
         force_apt_get: yes
         dpkg_options: "force-confdef,force-confold"
       register: apt_upgrade_result
-      async: 2400
-      poll: 10
-
+      # Removed async/poll to avoid connection issues during reboot
+    
     - name: Check if reboot is required
       stat:
         path: /var/run/reboot-required
       register: reboot_required
-
+    
+    - name: Display reboot requirement status
+      debug:
+        msg: "Reboot required: {{ reboot_required.stat.exists }}"
+    
     - name: Log reboot start time
       command: date "+%Y-%m-%d %H:%M:%S"
       register: reboot_start
       when: reboot_required.stat.exists
-
+      changed_when: false
+    
     - name: Reboot server if required
       ansible.builtin.reboot:
         msg: "Reboot initiated by Ansible"
-        pre_reboot_delay: 0
+        pre_reboot_delay: 5
         post_reboot_delay: 30
         reboot_timeout: 900
         test_command: uptime
+        connect_timeout: 10
       when: reboot_required.stat.exists
-      ignore_errors: true
-
-    - name: Wait for server to come back online
-      ansible.builtin.wait_for_connection:
-        connect_timeout: 30
-        sleep: 10
-        delay: 10
-        timeout: 600
+      async: 1000
+      poll: 0
+      register: reboot_task
+    
+    - name: Wait for reboot to complete
+      ansible.builtin.async_status:
+        jid: "{{ reboot_task.ansible_job_id }}"
+      register: reboot_result
+      until: reboot_result.finished
+      retries: 90
+      delay: 10
       when: reboot_required.stat.exists
-
-    - name: Verify system is fully booted
-      ansible.builtin.wait_for:
-        path: /var/run/reboot-required
-        state: absent
-        timeout: 60
-      when: reboot_required.stat.exists
-      ignore_errors: true
-
+    
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
       register: reboot_end
       when: reboot_required.stat.exists
-
+      changed_when: false
+    
     - name: Show reboot duration
       debug:
         msg: >
@@ -104,3 +105,7 @@
             ).total_seconds() | int
           }} seconds.
       when: reboot_required.stat.exists and reboot_end.stdout is defined
+    
+    - name: Verify system is responsive
+      command: uptime
+      changed_when: false
