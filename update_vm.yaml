@@ -1,6 +1,6 @@
 - name: Update Ubuntu Server VMs
   hosts: ubuntu_vms
-  serial: 1  # Changed to 1 to avoid connection issues during reboots
+  serial: 1
   become: true
   become_method: sudo
   gather_facts: yes
@@ -51,7 +51,6 @@
         force_apt_get: yes
         dpkg_options: "force-confdef,force-confold"
       register: apt_upgrade_result
-      # Removed async/poll to avoid connection issues during reboot
     
     - name: Check if reboot is required
       stat:
@@ -77,18 +76,6 @@
         test_command: uptime
         connect_timeout: 10
       when: reboot_required.stat.exists
-      async: 1000
-      poll: 0
-      register: reboot_task
-    
-    - name: Wait for reboot to complete
-      ansible.builtin.async_status:
-        jid: "{{ reboot_task.ansible_job_id }}"
-      register: reboot_result
-      until: reboot_result.finished
-      retries: 90
-      delay: 10
-      when: reboot_required.stat.exists
     
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
@@ -109,3 +96,8 @@
     - name: Verify system is responsive
       command: uptime
       changed_when: false
+      register: uptime_check
+    
+    - name: Show system uptime
+      debug:
+        msg: "{{ uptime_check.stdout }}"
