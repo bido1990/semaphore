@@ -1,0 +1,36 @@
+- name: Force install or update Komodo Periphery monthly
+  hosts: all
+  become: true
+
+  vars:
+    periphery_installer_url: "https://raw.githubusercontent.com/moghtech/komodo/main/scripts/setup-periphery.py"
+    periphery_installer_path: "/tmp/setup-periphery.py"
+
+  tasks:
+    - name: Ensure Python3 is installed
+      ansible.builtin.package:
+        name: python3
+        state: present
+
+    - name: Download latest periphery installer script
+      ansible.builtin.get_url:
+        url: "{{ periphery_installer_url }}"
+        dest: "{{ periphery_installer_path }}"
+        mode: '0755'
+        force: yes  # sempre sovrascrive
+
+    - name: Run periphery installer
+      ansible.builtin.command: "python3 {{ periphery_installer_path }}"
+      notify: Restart periphery service
+
+    - name: Ensure periphery service is enabled
+      ansible.builtin.systemd:
+        name: periphery
+        enabled: yes
+
+  handlers:
+    - name: Restart periphery service
+      ansible.builtin.systemd:
+        name: periphery
+        state: restarted
+        daemon_reload: yes
