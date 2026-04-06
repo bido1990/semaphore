@@ -77,25 +77,30 @@
           when: reboot_required.stat.exists
         
         - name: Wait for system to go down
-          wait_for_connection:
+          wait_for:
+            host: "{{ inventory_hostname }}"
+            port: 22
+            state: stopped
             delay: 5
-            timeout: 60
-          ignore_errors: yes
+            timeout: 120
+          delegate_to: localhost
           when: reboot_required.stat.exists
         
         - name: Wait for system to come back up
-          wait_for_connection:
+          wait_for:
+            host: "{{ inventory_hostname }}"
+            port: 22
+            state: started
             delay: 30
-            sleep: 10
             timeout: 600
+          delegate_to: localhost
           when: reboot_required.stat.exists
         
         - name: Wait for system to be fully ready
-          shell: uptime
-          register: uptime_output
-          retries: 10
-          delay: 10
-          until: uptime_output.rc == 0
+          wait_for_connection:
+            delay: 10
+            sleep: 10
+            timeout: 120
           when: reboot_required.stat.exists
       
       rescue:
