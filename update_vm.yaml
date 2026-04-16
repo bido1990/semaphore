@@ -6,7 +6,6 @@
   gather_facts: yes
   vars:
     ansible_command_timeout: 3600
-    # Reduce SSH timeouts to handle connection loss better
     ansible_ssh_common_args: '-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10'
   
   pre_tasks:
@@ -69,6 +68,16 @@
       when: reboot_required.stat.exists
       changed_when: false
     
+    - name: Enable verbose SSH logging for reboot (diagnostic)
+      set_fact:
+        ansible_ssh_common_args: '-vvv -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10'
+      when: reboot_required.stat.exists
+    
+    - name: Show SSH connection parameters
+      debug:
+        msg: "Using SSH args: {{ ansible_ssh_common_args }}"
+      when: reboot_required.stat.exists
+    
     - block:
         - name: Trigger reboot using shell command
           shell: 'sleep 2 && shutdown -r now "Ansible reboot"'
@@ -76,42 +85,75 @@
           poll: 0
           when: reboot_required.stat.exists
         
-        - name: Wait for system to go down
-          wait_for:
-            host: "{{ inventory_hostname }}"
-            port: 22
-            state: stopped
-            delay: 5
-            timeout: 120
-          delegate_to: localhost
+        - name: Log reboot trigger time
+          debug:
+            msg: "Reboot command issued for {{ inventory_hostname }} at {{ ansible_date_time.iso8601 }}"
+          when: reboot_required.stat.exists
+        
+        - name: Pause to ensure reboot command is issued
+          pause:
+            seconds: 10
           when: reboot_required.stat.exists
         
         - name: Wait for system to come back up
-          wait_for:
-            host: "{{ inventory_hostname }}"
-            port: 22
-            state: started
-            delay: 30
+          wait_for_connection:
+            delay: 15
+            sleep: 10
             timeout: 600
-          delegate_to: localhost
+          when: reboot_required.stat.exists
+          register: connection_wait
+        
+        - name: Log successful reconnection
+          debug:
+            msg: "Successfully reconnected to {{ inventory_hostname }}"
           when: reboot_required.stat.exists
         
         - name: Wait for system to be fully ready
-          wait_for_connection:
-            delay: 10
-            sleep: 10
-            timeout: 120
+          shell: uptime
+          register: uptime_output
+          retries: 10
+          delay: 10
+          until: uptime_output.rc == 0
+          when: reboot_required.stat.exists
+          changed_when: false
+        
+        - name: Show system status after reboot
+          debug:
+            msg: "System {{ inventory_hostname }} is ready: {{ uptime_output.stdout }}"
           when: reboot_required.stat.exists
       
       rescue:
-        - name: Log reboot issue
+        - name: Log reboot issue with details
           debug:
-            msg: "Encountered issue during reboot, attempting recovery..."
+            msg: |
+              Encountered issue during reboot on {{ inventory_hostname }}
+              Attempting recovery...
+              Last known state: {{ uptime_output | default('unknown') }}
         
-        - name: Final wait for connection
+        - name: Extended wait for connection recovery
           wait_for_connection:
-            delay: 10
-            timeout: 300
+            delay: 30
+            sleep: 15
+            timeout: 600
+          register: recovery_connection
+        
+        - name: Log recovery connection status
+          debug:
+            msg: "Recovery connection attempt completed for {{ inventory_hostname }}"
+        
+        - name: Verify system is back online
+          command: uptime
+          register: recovery_uptime
+          changed_when: false
+        
+        - name: Show recovery status
+          debug:
+            msg: "System {{ inventory_hostname }} recovered: {{ recovery_uptime.stdout }}"
+    
+    - name: Reset SSH logging to normal (post-reboot)
+      set_fact:
+        ansible_ssh_common_args: '-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10'
+      when: reboot_required.stat.exists
     
     - name: Log reboot end time
       command: date "+%Y-%m-%d %H:%M:%S"
@@ -137,6 +179,10 @@
     - name: Show system uptime
       debug:
         msg: "{{ uptime_check.stdout }}"
+    
+    - name: Show completion status for host
+      debug:
+        msg: "Update completed for {{ inventory_hostname }} - Reboot was {{ 'REQUIRED' if reboot_required.stat.exists else 'NOT required' }}"
 
 - name: Continue with remaining hosts
   hosts: ubuntu_vms
@@ -146,3 +192,16 @@
   tasks:
     - name: Final health check
       ping:
+      
+    - name: Get final system info
+      command: uptime
+      register: final_uptime
+      changed_when: false
+      
+    - name: Show completion message
+      debug:
+        msg: |
+          ========================================
+          All updates completed successfully for {{ inventory_hostname }}
+          Current uptime: {{ final_uptime.stdout }}
+          ========================================
