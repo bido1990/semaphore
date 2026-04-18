@@ -1,12 +1,10 @@
 ---
-- name: Backup Trek zip files to NAS via rsync
+- name: Backup Trek zip files to NAS
   hosts: vm_personal
   become: true
   vars:
-    backup_src: "/home/guido/docker/trek/data/backups/"
-    backup_dst: "/volume1/docker/trek/backups"
-    nas_host: "192.168.50.50"
-    nas_user: "guido"
+    backup_src: "/home/guido/docker/trek/data/backups"
+    backup_dst: "/mnt/NASGuido/trek/backups"
     keep_days: 7
 
   tasks:
@@ -20,27 +18,32 @@
         msg: "Cartella sorgente {{ backup_src }} non trovata. Controlla il volume Trek."
       when: not src_stat.stat.exists or not src_stat.stat.isdir
 
-    - name: Copia i backup Trek sul NAS via rsync
-      synchronize:
-        src: "{{ backup_src }}"
-        dest: "{{ nas_user }}@{{ nas_host }}:{{ backup_dst }}"
-        mode: push
-        rsync_opts:
-          - "--include=auto-backup-*.zip"
-          - "--exclude=*"
+    - name: Controlla che il mount NAS sia attivo
+      stat:
+        path: "{{ backup_dst }}"
+      register: dst_stat
+
+    - name: Fallisci se il mount NAS non è attivo
+      fail:
+        msg: "Destinazione {{ backup_dst }} non raggiungibile. Controlla il mount NFS."
+      when: not dst_stat.stat.exists or not dst_stat.stat.isdir
+
+    - name: Copia i backup Trek sul NAS
+      copy:
+        src: "{{ item }}"
+        dest: "{{ backup_dst }}/"
+        remote_src: true
+      with_fileglob:
+        - "{{ backup_src }}/auto-backup-*.zip"
 
     - name: Cerca backup più vecchi di {{ keep_days }} giorni sul NAS
-      delegate_to: "{{ nas_host }}"
-      remote_user: "{{ nas_user }}"
       find:
         paths: "{{ backup_dst }}"
         patterns: "auto-backup-*.zip"
         age: "{{ keep_days }}d"
       register: old_backups
 
-    - name: Elimina backup vecchi sul NAS
-      delegate_to: "{{ nas_host }}"
-      remote_user: "{{ nas_user }}"
+    - name: Elimina backup vecchi
       file:
         path: "{{ item.path }}"
         state: absent
