@@ -31,28 +31,29 @@
         state: directory
         mode: "0755"
 
-    - name: Assicura che il file di stato esista
-      ansible.builtin.file:
-        path: "{{ state_file }}"
-        state: touch
-        mode: "0644"
+    - name: Assicura che il file di stato esista e non sia vuoto
+      ansible.builtin.shell: |
+        touch {{ state_file }}
+      args:
+        executable: /bin/bash
+      changed_when: false
 
     - name: Recupera ultima release stabile da GitHub API
-      ansible.builtin.uri:
-        url: "https://api.github.com/repos/{{ item.repo }}/releases/latest"
-        method: GET
-        return_content: true
-        headers:
-          Accept: application/vnd.github+json
+      ansible.builtin.shell: |
+        curl -s \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/{{ item.repo }}/releases/latest" \
+          | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])"
       register: github_response
       loop: "{{ repos }}"
       loop_control:
         label: "{{ item.name }}"
+      changed_when: false
 
     - name: Leggi file di stato corrente
-      ansible.builtin.slurp:
-        src: "{{ state_file }}"
+      ansible.builtin.shell: cat {{ state_file }} || true
       register: state_content
+      changed_when: false
 
     - name: Controlla e notifica nuove versioni
       ansible.builtin.include_tasks: check-single-release.yml
@@ -60,4 +61,4 @@
       loop_control:
         label: "{{ item.item.name }}"
       vars:
-        state_lines: "{{ state_content.content | b64decode }}"
+        state_lines: "{{ state_content.stdout }}"
