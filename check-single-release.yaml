@@ -1,0 +1,31 @@
+---
+- name: Estrai tag dalla risposta API
+  ansible.builtin.set_fact:
+    latest_tag: "{{ item.json.tag_name }}"
+    repo_name: "{{ item.item.name }}"
+    repo_path: "{{ item.item.repo }}"
+
+- name: Leggi versione precedente dal file di stato
+  ansible.builtin.set_fact:
+    last_tag: >-
+      {{ state_lines
+         | regex_search('^' + repo_name + '=(.+)$', '\1', multiline=True)
+         | first | default('') }}
+
+- name: Notifica Discord se versione cambiata
+  ansible.builtin.uri:
+    url: "{{ discord_webhook_url }}"
+    method: POST
+    body_format: json
+    body:
+      username: "Homelab Updates"
+      content: "**{{ repo_name }}** `{{ latest_tag }}` — <https://github.com/{{ repo_path }}/releases/tag/{{ latest_tag }}>"
+    status_code: 204
+  when: latest_tag != last_tag and latest_tag != ''
+
+- name: Aggiorna file di stato
+  ansible.builtin.lineinfile:
+    path: "{{ state_file }}"
+    regexp: "^{{ repo_name }}="
+    line: "{{ repo_name }}={{ latest_tag }}"
+  when: latest_tag != last_tag and latest_tag != ''
