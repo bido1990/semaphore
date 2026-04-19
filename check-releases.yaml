@@ -56,7 +56,7 @@
       changed_when: false
 
     - name: Controlla e notifica nuove versioni
-      ansible.builtin.include_tasks: check-single-release.yml
+      ansible.builtin.include_tasks: check-single-release.yaml
       loop: "{{ github_response.results }}"
       loop_control:
         label: "{{ item.item.name }}"
