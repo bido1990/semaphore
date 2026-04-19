@@ -1,0 +1,63 @@
+---
+- name: Controlla nuove release GitHub e notifica Discord
+  hosts: oracle_vps
+  gather_facts: false
+
+  vars:
+    state_file: /home/semaphore/scripts/last-versions.txt
+    repos:
+      - name: Authentik
+        repo: goauthentik/authentik
+      - name: Traefik
+        repo: traefik/traefik
+      - name: Komodo
+        repo: moghtech/komodo
+      - name: Semaphore
+        repo: semaphoreui/semaphore
+      - name: FerretDB
+        repo: FerretDB/FerretDB
+      - name: CrowdSec
+        repo: crowdsecurity/crowdsec
+      - name: Paperless-ngx
+        repo: paperless-ngx/paperless-ngx
+      - name: Immich
+        repo: immich-app/immich
+
+  tasks:
+
+    - name: Assicura che la directory scripts esista
+      ansible.builtin.file:
+        path: /home/semaphore/scripts
+        state: directory
+        mode: "0755"
+
+    - name: Assicura che il file di stato esista
+      ansible.builtin.file:
+        path: "{{ state_file }}"
+        state: touch
+        mode: "0644"
+
+    - name: Recupera ultima release stabile da GitHub API
+      ansible.builtin.uri:
+        url: "https://api.github.com/repos/{{ item.repo }}/releases/latest"
+        method: GET
+        return_content: true
+        headers:
+          Accept: application/vnd.github+json
+      register: github_response
+      loop: "{{ repos }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Leggi file di stato corrente
+      ansible.builtin.slurp:
+        src: "{{ state_file }}"
+      register: state_content
+
+    - name: Controlla e notifica nuove versioni
+      ansible.builtin.include_tasks: check-single-release.yml
+      loop: "{{ github_response.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      vars:
+        state_lines: "{{ state_content.content | b64decode }}"
