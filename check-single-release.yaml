@@ -8,9 +8,9 @@
 - name: Leggi versione precedente dal file di stato
   ansible.builtin.set_fact:
     last_tag: >-
-      {{ state_lines
+      {{ (state_lines
          | regex_search('^' + repo_name + '=(.+)$', '\1', multiline=True)
-         | first | default('') }}
+         or [''])[0] }}
 
 - name: Notifica Discord se versione cambiata
   ansible.builtin.uri:
