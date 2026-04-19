@@ -1,7 +1,7 @@
 ---
 - name: Estrai tag dalla risposta API
   ansible.builtin.set_fact:
-    latest_tag: "{{ item.json.tag_name }}"
+    latest_tag: "{{ item.stdout | trim }}"
     repo_name: "{{ item.item.name }}"
     repo_path: "{{ item.item.repo }}"
 
