@@ -14,8 +14,8 @@
         repo: moghtech/komodo
       - name: Semaphore
         repo: semaphoreui/semaphore
-      - name: FerretDB
-        repo: FerretDB/FerretDB
+      - name: AdGuard Home
+        repo: AdguardTeam/AdGuardHome
       - name: CrowdSec
         repo: crowdsecurity/crowdsec
       - name: Paperless-ngx
