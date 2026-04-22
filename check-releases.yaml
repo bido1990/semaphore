@@ -62,3 +62,36 @@
         label: "{{ item.item.name }}"
       vars:
         state_lines: "{{ state_content.stdout }}"
+        
+    - name: Invia riepilogo aggiornamenti rilevati
+      ansible.builtin.uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        body:
+          username: "Homelab Updates"
+          content: "**Aggiornamenti rilevati oggi:**\n{{ updates_found | join('\n') }}"
+        status_code: 204
+      when: updates_found is defined and updates_found | length > 0
+
+    - name: Nessun aggiornamento rilevato
+      ansible.builtin.uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        body:
+          username: "Homelab Updates"
+          content: "Nessun aggiornamento rilevato."
+        status_code: 204
+      when: updates_found is not defined or updates_found | length == 0
+
+    - name: Invia resoconto versioni correnti
+      ansible.builtin.uri:
+        url: "{{ discord_webhook_url }}"
+        method: POST
+        body_format: json
+        body:
+          username: "Homelab Updates"
+          content: "**Versioni correnti:**\n{{ versions_summary | join('\n') }}"
+        status_code: 204
+      when: versions_summary is defined and versions_summary | length > 0
