@@ -12,7 +12,7 @@
          | regex_search('^' + repo_name + '=(.+)$', '\1', multiline=True)
          or [''])[0] }}
 
-- name: Notifica Discord se versione cambiata
+- name: Notifica Discord per nuova versione
   ansible.builtin.uri:
     url: "{{ discord_webhook_url }}"
     method: POST
@@ -29,3 +29,15 @@
     regexp: "^{{ repo_name }}="
     line: "{{ repo_name }}={{ latest_tag }}"
   when: latest_tag != last_tag and latest_tag != ''
+
+# Aggiungi alla lista aggiornamenti per il riepilogo finale
+- name: Registra aggiornamento rilevato
+  ansible.builtin.set_fact:
+    updates_found: "{{ (updates_found | default([])) + [repo_name + ' ' + last_tag + ' → ' + latest_tag] }}"
+  when: latest_tag != last_tag and latest_tag != ''
+
+# Aggiungi sempre alla lista versioni correnti
+- name: Registra versione corrente per il resoconto
+  ansible.builtin.set_fact:
+    versions_summary: "{{ (versions_summary | default([])) + [repo_name + ': ' + latest_tag] }}"
+  when: latest_tag != ''
