@@ -27,6 +27,15 @@
       changed_when: false
       failed_when: ts.rc != 0
 
+    - name: DEBUG whoami
+      ansible.builtin.command: whoami
+      register: whoami_out
+      changed_when: false
+    
+    - name: DEBUG show user
+      ansible.builtin.debug:
+        msg: "{{ whoami_out.stdout }}"
+
     - name: Set backup directory
       ansible.builtin.set_fact:
         backup_dir: "{{ backup_root }}/{{ ts.stdout }}"
