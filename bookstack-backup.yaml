@@ -9,6 +9,7 @@
     ansible_ssh_transfer_method: piped  # <-- aggiunta
     # Path on the NAS to the BookStack app root (the folder that contains .env, public/, storage/, themes/)
     bookstack_root: "/volume1/docker/bookstack/data" 
+    docker_bin: /usr/local/bin/docker
 
     # Database settings
     db_name: "bookstack"
@@ -46,7 +47,7 @@
       when: use_docker_db | bool
       ansible.builtin.shell: |
         set -euo pipefail
-        docker exec {{ db_container }} sh -lc \
+        {{ docker_bin }} exec {{ db_container }} sh -lc \
           "mysqldump -u{{ db_user }} -p'{{ db_password }}' {{ db_name }}" \
           > "{{ backup_dir }}/bookstack.sql"
       args:
