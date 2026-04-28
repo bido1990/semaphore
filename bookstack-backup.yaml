@@ -1,7 +1,7 @@
 ---
 - name: Weekly BookStack backup (DB + files)
   hosts: synology_host
-  become: true
+  become: false
   gather_facts: false
   vars:
     backup_root: "/volume1/docker/backup/bookstack"
@@ -10,6 +10,7 @@
     # Path on the NAS to the BookStack app root (the folder that contains .env, public/, storage/, themes/)
     bookstack_root: "/volume1/docker/bookstack/data" 
     docker_bin: /usr/local/bin/docker
+    ansible_remote_tmp: /tmp/.ansible/tmp
 
     # Database settings
     db_name: "bookstack"
