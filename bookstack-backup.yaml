@@ -5,7 +5,7 @@
   gather_facts: false
 
   vars:
-    backup_root: "/volume1/stuff/bookstack-backup"
+    backup_root: "/volume1/docker/backup/bookstack"
     retention_days: 60
 
     # Path on the NAS to the BookStack app root (the folder that contains .env, public/, storage/, themes/)
@@ -14,7 +14,7 @@
     # Database settings
     db_name: "bookstack"
     db_user: "bookstackuser"
-    db_password: "Dm7Pv2E&k@*N"                          # Prefer Ansible Vault / Semaphore secret var
+    db_password: "{{ bookstack_db_password }}"                          # Prefer Ansible Vault / Semaphore secret var
 
     # If DB runs in Docker, set use_docker_db=true and provide container name
     use_docker_db: true
