@@ -55,10 +55,9 @@
 
     - name: Dump database (docker exec)
       when: use_docker_db | bool
-      become: true
       ansible.builtin.shell: |
         set -euo pipefail
-        {{ docker_bin }} exec {{ db_container }} sh -lc \
+        sudo {{ docker_bin }} exec {{ db_container }} sh -lc \
           "mysqldump -u{{ db_user }} -p'{{ db_password }}' {{ db_name }}" \
           > "{{ backup_dir }}/bookstack.sql"
       args:
