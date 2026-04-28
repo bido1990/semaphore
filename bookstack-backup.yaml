@@ -3,13 +3,12 @@
   hosts: synology_host
   become: true
   gather_facts: false
-
   vars:
     backup_root: "/volume1/docker/backup/bookstack"
     retention_days: 60
-
+    ansible_ssh_transfer_method: piped  # <-- aggiunta
     # Path on the NAS to the BookStack app root (the folder that contains .env, public/, storage/, themes/)
-    bookstack_root: "/volume1/docker/bookstack/data"   # <-- change me
+    bookstack_root: "/volume1/docker/bookstack/data" 
 
     # Database settings
     db_name: "bookstack"
@@ -25,6 +24,7 @@
       ansible.builtin.command: date +%Y%m%d-%H%M%S
       register: ts
       changed_when: false
+      failed_when: ts.rc != 0
 
     - name: Set backup directory
       ansible.builtin.set_fact:
