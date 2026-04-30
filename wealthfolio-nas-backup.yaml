@@ -31,12 +31,12 @@
     - name: Trova i backup WF da copiare
       find:
         paths: "{{ backup_src }}"
-        patterns: "wealthfolio-backup-*.db"
+        patterns: "wealthfolio_backup_*.db"
       register: wf_backups
 
     - name: Fallisci se non ci sono backup da copiare
       fail:
-        msg: "Nessun file wealthfolio-backup-*.db trovato in {{ backup_src }}."
+        msg: "Nessun file wealthfolio_backup_*.db trovato in {{ backup_src }}."
       when: wf_backups.matched == 0
 
     - name: Copia i backup WF sul NAS
@@ -49,7 +49,7 @@
     - name: Cerca backup più vecchi di {{ keep_days }} giorni sul NAS
       find:
         paths: "{{ backup_dst }}"
-        patterns: "wealthfolio-backup-*.db"
+        patterns: "wealthfolio_backup_*.db"
         age: "{{ keep_days }}d"
       register: old_backups
 
