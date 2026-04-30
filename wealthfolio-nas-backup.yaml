@@ -37,14 +37,14 @@
     - name: Fallisci se non ci sono backup da copiare
       fail:
         msg: "Nessun file wealthfolio-backup-*.db trovato in {{ backup_src }}."
-      when: trek_backups.matched == 0
+      when: wf_backups.matched == 0
 
     - name: Copia i backup WF sul NAS
       copy:
         src: "{{ item.path }}"
         dest: "{{ backup_dst }}/"
         remote_src: true
-      loop: "{{ trek_backups.files }}"
+      loop: "{{ wf_backups.files }}"
 
     - name: Cerca backup più vecchi di {{ keep_days }} giorni sul NAS
       find:
