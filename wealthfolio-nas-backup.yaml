@@ -1,0 +1,61 @@
+---
+- name: Backup Wealthfolio zip files to NAS
+  hosts: vm_personal
+  become: true
+  vars:
+    backup_src: "/home/guido/docker/wealthfolio/data/backups"
+    backup_dst: "/mnt/NASGuido/wealthfolio/backups"
+    keep_days: 30
+
+  tasks:
+    - name: Controlla che la cartella sorgente esista
+      stat:
+        path: "{{ backup_src }}"
+      register: src_stat
+
+    - name: Fallisci se la cartella sorgente non è accessibile
+      fail:
+        msg: "Cartella sorgente {{ backup_src }} non trovata. Controlla il volume Trek."
+      when: not src_stat.stat.exists or not src_stat.stat.isdir
+
+    - name: Controlla che il mount NAS sia attivo
+      stat:
+        path: "{{ backup_dst }}"
+      register: dst_stat
+
+    - name: Fallisci se il mount NAS non è attivo
+      fail:
+        msg: "Destinazione {{ backup_dst }} non raggiungibile. Controlla il mount NFS."
+      when: not dst_stat.stat.exists or not dst_stat.stat.isdir
+
+    - name: Trova i backup WF da copiare
+      find:
+        paths: "{{ backup_src }}"
+        patterns: "wealthfolio-backup-*.db"
+      register: wf_backups
+
+    - name: Fallisci se non ci sono backup da copiare
+      fail:
+        msg: "Nessun file wealthfolio-backup-*.db trovato in {{ backup_src }}."
+      when: trek_backups.matched == 0
+
+    - name: Copia i backup WF sul NAS
+      copy:
+        src: "{{ item.path }}"
+        dest: "{{ backup_dst }}/"
+        remote_src: true
+      loop: "{{ trek_backups.files }}"
+
+    - name: Cerca backup più vecchi di {{ keep_days }} giorni sul NAS
+      find:
+        paths: "{{ backup_dst }}"
+        patterns: "wealthfolio-backup-*.db"
+        age: "{{ keep_days }}d"
+      register: old_backups
+
+    - name: Elimina backup vecchi
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ old_backups.files }}"
+      when: old_backups.matched > 0
