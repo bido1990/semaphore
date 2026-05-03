@@ -5,7 +5,7 @@
   vars:
     backup_src: "/home/guido/docker/wealthfolio/data/backups"
     backup_dst: "/mnt/NASGuido/wealthfolio/backups"
-    keep_days: 30
+    keep_count: 3
 
   tasks:
     - name: Controlla che la cartella sorgente esista
@@ -46,16 +46,15 @@
         remote_src: true
       loop: "{{ wf_backups.files }}"
 
-    - name: Cerca backup più vecchi di {{ keep_days }} giorni sul NAS
+    - name: Trova tutti i backup sul NAS
       find:
         paths: "{{ backup_dst }}"
         patterns: "wealthfolio_backup_*.db"
-        age: "{{ keep_days }}d"
-      register: old_backups
+      register: all_nas_backups
 
-    - name: Elimina backup vecchi
+    - name: Elimina i backup in eccesso (mantieni solo i {{ keep_count }} più recenti)
       file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ old_backups.files }}"
-      when: old_backups.matched > 0
+      loop: "{{ (all_nas_backups.files | sort(attribute='mtime') | reverse | list)[keep_count:] }}"
+      when: all_nas_backups.matched > keep_count
